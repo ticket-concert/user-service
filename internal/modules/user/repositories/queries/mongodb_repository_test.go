@@ -29,7 +29,7 @@ func (suite *CommandTestSuite) SetupTest() {
 		suite.mockMongodb,
 		suite.mockLogger,
 	)
-	suite.ctx = context.WithValue(context.TODO(), "key", "value")
+	suite.ctx = context.Background()
 }
 
 func TestCommandTestSuite(t *testing.T) {
@@ -43,7 +43,31 @@ func (suite *CommandTestSuite) TestFindOneByEmail() {
 	suite.mockMongodb.On("FindOne", mock.Anything, mock.Anything).Return((<-chan helpers.Result)(expectedResult))
 
 	// Act
-	result := suite.repository.FindOneByEmail(suite.ctx, "irmanjuliansyah@gmail.com")
+	result := suite.repository.FindOneByEmail(suite.ctx, "alif@gmail.com")
+	// Asset
+	assert.NotNil(suite.T(), result, "Expected a result")
+
+	// Simulate receiving a result from the channel
+	go func() {
+		expectedResult <- helpers.Result{Data: "result not nil", Error: nil}
+		close(expectedResult)
+	}()
+
+	// Wait for the goroutine to complete
+	<-result
+
+	// Assert FindOne
+	suite.mockMongodb.AssertCalled(suite.T(), "FindOne", mock.Anything, mock.Anything)
+}
+
+func (suite *CommandTestSuite) TestFindOneUserId() {
+
+	// Mock FindOne
+	expectedResult := make(chan helpers.Result)
+	suite.mockMongodb.On("FindOne", mock.Anything, mock.Anything).Return((<-chan helpers.Result)(expectedResult))
+
+	// Act
+	result := suite.repository.FindOneUserId(suite.ctx, "userId")
 	// Asset
 	assert.NotNil(suite.T(), result, "Expected a result")
 
@@ -67,7 +91,7 @@ func (suite *CommandTestSuite) TestFindOneByEmailUserTemp() {
 	suite.mockMongodb.On("FindOne", mock.Anything, mock.Anything).Return((<-chan helpers.Result)(expectedResult))
 
 	// Act
-	result := suite.repository.FindOneByEmailUserTemp(suite.ctx, "irmanjuliansyah@gmail.com")
+	result := suite.repository.FindOneByEmailUserTemp(suite.ctx, "alif@gmail.com")
 	// Asset
 	assert.NotNil(suite.T(), result, "Expected a result")
 

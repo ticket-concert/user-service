@@ -32,7 +32,7 @@ func (suite *QueryUsecaseTestSuite) SetupTest() {
 	suite.mockUserRepositoryQuery = &mockcert.MongodbRepositoryQuery{}
 	suite.mockUserRepositoryCommand = &mockcert.MongodbRepositoryCommand{}
 	suite.mockLogger = &mocklog.Logger{}
-	suite.ctx = context.WithValue(context.TODO(), "key", "value")
+	suite.ctx = context.Background()
 	suite.usecase = uc.NewQueryUsecase(
 		suite.mockUserRepositoryQuery,
 		suite.mockUserRepositoryCommand,
@@ -52,8 +52,8 @@ func (suite *QueryUsecaseTestSuite) TestGetProfileSuccess() {
 	mockUserQueryResponse := helpers.Result{
 		Data: &userEntity.User{
 			UserId:       "76142a47-40c3-44a0-a7d3-793ee09a518b",
-			FullName:     "suryadaren",
-			Email:        "suryadaren@gmail.com",
+			FullName:     "alif",
+			Email:        "alif@gmail.com",
 			NIK:          "12312131131",
 			MobileNumber: "+6281281015121",
 			Address:      "<string>",
@@ -72,8 +72,8 @@ func (suite *QueryUsecaseTestSuite) TestGetProfileSuccess() {
 	assert.NoError(suite.T(), err)
 	assert.NotNil(suite.T(), result)
 	assert.Equal(suite.T(), payload.UserId, result.UserId)
-	assert.Equal(suite.T(), "suryadaren", result.FullName)
-	assert.Equal(suite.T(), "suryadaren@gmail.com", result.Email)
+	assert.Equal(suite.T(), "alif", result.FullName)
+	assert.Equal(suite.T(), "alif@gmail.com", result.Email)
 	assert.Equal(suite.T(), "12312131131", result.NIK)
 	assert.Equal(suite.T(), "+6281281015121", result.MobileNumber)
 	assert.Equal(suite.T(), "<string>", result.Address)

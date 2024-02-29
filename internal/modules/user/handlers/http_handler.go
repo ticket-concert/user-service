@@ -103,16 +103,13 @@ func (u UserHttpHandler) Login(c *fiber.Ctx) error {
 
 func (u UserHttpHandler) GetProfile(c *fiber.Ctx) error {
 	req := new(userRequest.GetProfile)
-	req.UserId = c.Locals("userId").(string)
-	if err := c.QueryParser(req); err != nil {
+	userId, ok := c.Locals("userId").(string)
+	if !ok {
 		return helpers.RespError(c, u.Logger, errors.BadRequest("bad request"))
 	}
-	if err := u.Validator.Struct(req); err != nil {
-		return helpers.RespError(c, u.Logger, errors.BadRequest("validation error"))
-	}
 
+	req.UserId = userId
 	resp, err := u.UserUsecaseQuery.GetProfile(c.Context(), *req)
-
 	if err != nil {
 		return helpers.RespCustomError(c, u.Logger, err)
 	}

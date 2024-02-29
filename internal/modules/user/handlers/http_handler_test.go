@@ -57,24 +57,25 @@ func TestUserHttpHandlerTestSuite(t *testing.T) {
 
 func (suite *UserHttpHandlerTestSuite) TestRegisterUser() {
 	suite.cUC.On("RegisterUser", mock.Anything, mock.Anything).Return(&userResponse.RegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 	}, nil)
 	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	reqM := userRequest.RegisterUser{
-		FullName:      "irmanjuliansyah",
-		Email:         "irmanjuliansyah@gmail.com",
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
 		Password:      "Password1@",
 		NIK:           "12312131131",
-		MobileNumber:  "+6281281015121",
-		Address:       "<string>",
-		ProvinceId:    "<string>",
-		CityId:        "<string>",
-		DistrictId:    "<string>",
-		SubdictrictId: "<string>",
-		RtRw:          "<string>",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		CountryId:     "1",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
 		Role:          "user",
-		KKNumber:      "<string>",
+		KKNumber:      "1212121212",
 	}
 	requestBody, _ := json.Marshal(reqM)
 	req := httptest.NewRequest(fiber.MethodPost, "/v1/register", bytes.NewBuffer(requestBody))
@@ -91,7 +92,7 @@ func (suite *UserHttpHandlerTestSuite) TestRegisterUser() {
 }
 func (suite *UserHttpHandlerTestSuite) TestRegisterUserErrorBodyParse() {
 	suite.cUC.On("RegisterUser", mock.Anything, mock.Anything).Return(&userResponse.RegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 	}, nil)
 	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -114,7 +115,7 @@ func (suite *UserHttpHandlerTestSuite) TestRegisterUserErrorBodyParse() {
 
 func (suite *UserHttpHandlerTestSuite) TestRegisterUserErrorValidation() {
 	suite.cUC.On("RegisterUser", mock.Anything, mock.Anything).Return(&userResponse.RegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 	}, nil)
 	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
@@ -134,25 +135,24 @@ func (suite *UserHttpHandlerTestSuite) TestRegisterUserErrorValidation() {
 }
 
 func (suite *UserHttpHandlerTestSuite) TestRegisterUserError() {
-	suite.cUC.On("RegisterUser", mock.Anything, mock.Anything).Return(&userResponse.RegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
-	}, errors.InternalServerError("Error"))
+	suite.cUC.On("RegisterUser", mock.Anything, mock.Anything).Return(nil, errors.InternalServerError("Error"))
 	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	reqM := userRequest.RegisterUser{
-		FullName:      "irmanjuliansyah",
-		Email:         "irmanjuliansyah@gmail.com",
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
 		Password:      "Password1@",
 		NIK:           "12312131131",
-		MobileNumber:  "+6281281015121",
-		Address:       "<string>",
-		ProvinceId:    "<string>",
-		CityId:        "<string>",
-		DistrictId:    "<string>",
-		SubdictrictId: "<string>",
-		RtRw:          "<string>",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		CountryId:     "1",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
 		Role:          "user",
-		KKNumber:      "<string>",
+		KKNumber:      "1212121212",
 	}
 	requestBody, _ := json.Marshal(reqM)
 	req := httptest.NewRequest(fiber.MethodPost, "/v1/register", bytes.NewBuffer(requestBody))
@@ -177,7 +177,7 @@ func (suite *UserHttpHandlerTestSuite) TestVerifyRegisterUser() {
 	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	reqM := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 		Otp:   "123456",
 	}
 	requestBody, _ := json.Marshal(reqM)
@@ -193,6 +193,224 @@ func (suite *UserHttpHandlerTestSuite) TestVerifyRegisterUser() {
 	err := suite.handler.VerifyRegisterUser(ctx)
 	assert.Nil(suite.T(), err)
 }
+
+func (suite *UserHttpHandlerTestSuite) TestUpdateUser() {
+	var response string
+
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Locals("userId", "12345")
+
+	suite.cUC.On("UpdateUser", mock.Anything, mock.Anything, mock.Anything).Return(response, nil)
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	reqM := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+	requestBody, _ := json.Marshal(reqM)
+	req := httptest.NewRequest(fiber.MethodPut, "/v1/profile", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx.Request().SetRequestURI("/v1/profile")
+	ctx.Request().Header.SetMethod(fiber.MethodPut)
+	ctx.Request().Header.SetContentType("application/json")
+	ctx.Request().SetBody(requestBody)
+
+	err := suite.handler.UpdateUser(ctx)
+	assert.Nil(suite.T(), err)
+}
+
+func (suite *UserHttpHandlerTestSuite) TestUpdateUserErrBodyParser() {
+	var response string
+
+	suite.cUC.On("UpdateUser", mock.Anything, mock.Anything, mock.Anything).Return(response, nil)
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	reqM := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+	requestBody, _ := json.Marshal(reqM)
+	req := httptest.NewRequest(fiber.MethodPut, "/v1/profile", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Locals("userId", "12345")
+	ctx.Request().SetRequestURI("/v1/profile")
+	ctx.Request().Header.SetMethod(fiber.MethodPut)
+	ctx.Request().Header.SetContentType("application/json")
+	// ctx.Request().SetBody(requestBody)
+
+	err := suite.handler.UpdateUser(ctx)
+	assert.Nil(suite.T(), err)
+}
+
+func (suite *UserHttpHandlerTestSuite) TestUpdateUserErrValidation() {
+	var response string
+
+	suite.cUC.On("UpdateUser", mock.Anything, mock.Anything, mock.Anything).Return(response, nil)
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	reqM := userRequest.UpdateUser{}
+	requestBody, _ := json.Marshal(reqM)
+	req := httptest.NewRequest(fiber.MethodPut, "/v1/profile", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Locals("userId", "12345")
+	ctx.Request().SetRequestURI("/v1/profile")
+	ctx.Request().Header.SetMethod(fiber.MethodPut)
+	ctx.Request().Header.SetContentType("application/json")
+	ctx.Request().SetBody(requestBody)
+
+	err := suite.handler.UpdateUser(ctx)
+	assert.Nil(suite.T(), err)
+}
+
+func (suite *UserHttpHandlerTestSuite) TestLoginUser() {
+	var response *userResponse.LoginUserResp
+
+	suite.cUC.On("LoginUser", mock.Anything, mock.Anything).Return(response, nil)
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	reqM := userRequest.LoginUser{
+		Email:    "email",
+		Password: "password",
+	}
+	requestBody, _ := json.Marshal(reqM)
+	req := httptest.NewRequest(fiber.MethodPost, "/v1/login", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Request().SetRequestURI("/v1/login")
+	ctx.Request().Header.SetMethod(fiber.MethodPost)
+	ctx.Request().Header.SetContentType("application/json")
+	ctx.Request().SetBody(requestBody)
+
+	err := suite.handler.Login(ctx)
+	assert.Nil(suite.T(), err)
+}
+
+func (suite *UserHttpHandlerTestSuite) TestUpdateUserError() {
+	suite.cUC.On("UpdateUser", mock.Anything, mock.Anything, mock.Anything).Return("", errors.InternalServerError("error"))
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	reqM := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+	requestBody, _ := json.Marshal(reqM)
+	req := httptest.NewRequest(fiber.MethodPut, "/v1/profile", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Locals("userId", "12345")
+	ctx.Request().SetRequestURI("/v1/profile")
+	ctx.Request().Header.SetMethod(fiber.MethodPut)
+	ctx.Request().Header.SetContentType("application/json")
+	ctx.Request().SetBody(requestBody)
+
+	err := suite.handler.UpdateUser(ctx)
+	assert.Nil(suite.T(), err)
+}
+
+func (suite *UserHttpHandlerTestSuite) TestLoginUserError() {
+	suite.cUC.On("LoginUser", mock.Anything, mock.Anything).Return(nil, errors.InternalServerError("error"))
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	reqM := userRequest.LoginUser{
+		Email:    "email",
+		Password: "password",
+	}
+	requestBody, _ := json.Marshal(reqM)
+	req := httptest.NewRequest(fiber.MethodPost, "/v1/login", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Request().SetRequestURI("/v1/login")
+	ctx.Request().Header.SetMethod(fiber.MethodPost)
+	ctx.Request().Header.SetContentType("application/json")
+	ctx.Request().SetBody(requestBody)
+
+	err := suite.handler.Login(ctx)
+	assert.Nil(suite.T(), err)
+}
+
+func (suite *UserHttpHandlerTestSuite) TestLoginUserErrValidation() {
+	var response *userResponse.LoginUserResp
+
+	suite.cUC.On("LoginUser", mock.Anything, mock.Anything).Return(response, nil)
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	reqM := userRequest.LoginUser{}
+	requestBody, _ := json.Marshal(reqM)
+	req := httptest.NewRequest(fiber.MethodPost, "/v1/login", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Request().SetRequestURI("/v1/login")
+	ctx.Request().Header.SetMethod(fiber.MethodPost)
+	ctx.Request().Header.SetContentType("application/json")
+	ctx.Request().SetBody(requestBody)
+
+	err := suite.handler.Login(ctx)
+	assert.Nil(suite.T(), err)
+}
+
+func (suite *UserHttpHandlerTestSuite) TestLoginUserErrBodyParser() {
+	var response *userResponse.LoginUserResp
+
+	suite.cUC.On("LoginUser", mock.Anything, mock.Anything).Return(response, nil)
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	reqM := userRequest.LoginUser{
+		Email:    "email",
+		Password: "password",
+	}
+	requestBody, _ := json.Marshal(reqM)
+	req := httptest.NewRequest(fiber.MethodPost, "/v1/login", bytes.NewBuffer(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Request().SetRequestURI("/v1/login")
+	ctx.Request().Header.SetMethod(fiber.MethodPost)
+	ctx.Request().Header.SetContentType("application/json")
+	// ctx.Request().SetBody(requestBody)
+
+	err := suite.handler.Login(ctx)
+	assert.Nil(suite.T(), err)
+}
+
 func (suite *UserHttpHandlerTestSuite) TestVerifyUserErrorBodyParse() {
 	var response *userResponse.VerifyRegister
 
@@ -200,7 +418,7 @@ func (suite *UserHttpHandlerTestSuite) TestVerifyUserErrorBodyParse() {
 	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	reqM := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 		Otp:   "123456",
 	}
 
@@ -247,7 +465,7 @@ func (suite *UserHttpHandlerTestSuite) TestVerifyUserError() {
 	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 	reqM := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 		Otp:   "123456",
 	}
 
@@ -284,6 +502,20 @@ func (suite *UserHttpHandlerTestSuite) TestGetProfile() {
 func (suite *UserHttpHandlerTestSuite) TestGetProfileError() {
 	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
 	ctx.Locals("userId", "12345")
+
+	suite.cUQ.On("GetProfile", mock.Anything, mock.Anything).Return(nil, errors.InternalServerError("Error"))
+	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	req := httptest.NewRequest(fiber.MethodGet, "/v1/get-profile", nil)
+	req.Header.Set("Content-Type", "application/json")
+
+	err := suite.handler.GetProfile(ctx)
+	assert.Nil(suite.T(), err)
+}
+
+func (suite *UserHttpHandlerTestSuite) TestGetProfileErrorParse() {
+	ctx := suite.app.AcquireCtx(&fasthttp.RequestCtx{})
+	ctx.Locals("userId", 12345)
 
 	suite.cUQ.On("GetProfile", mock.Anything, mock.Anything).Return(nil, errors.InternalServerError("Error"))
 	suite.cLog.On("Info", mock.Anything, mock.Anything, mock.Anything).Return(nil)

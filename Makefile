@@ -15,7 +15,7 @@ dev:
 unit-test:
 	@echo "Running tests"
 	mkdir -p ./test/coverage && \
-		CGO_ENABLED=1 GOOS=linux go test $(BUILD_ARGS) -v ./... -coverprofile=./test/coverage/coverage.out
+		CGO_ENABLED=1 go test -tags dynamic -v ./... -coverprofile=./test/coverage/coverage.out
 
 coverage:
 	@echo "Running tests with coverage"

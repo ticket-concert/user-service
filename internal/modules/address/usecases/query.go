@@ -53,12 +53,6 @@ func (q queryUsecase) FindProvinces(origCtx context.Context, payload request.Pro
 		return nil, errors.InternalServerError("cannot parsing data")
 	}
 
-	if province == nil {
-		msg := "Province Not Found"
-		q.logger.Error(ctx, msg, fmt.Sprintf("%+v", payload))
-		return nil, errors.NotFound("province not found")
-	}
-
 	var collectionData = make([]response.Province, 0)
 	for _, value := range *province {
 		collectionData = append(collectionData, response.Province{
@@ -98,10 +92,6 @@ func (q queryUsecase) FindCities(origCtx context.Context, payload request.City) 
 	city, ok := resp.Data.(*[]entity.City)
 	if !ok {
 		return nil, errors.InternalServerError("cannot parsing data")
-	}
-
-	if city == nil {
-		return nil, errors.NotFound("city not found")
 	}
 
 	var collectionData = make([]response.City, 0)
@@ -147,10 +137,6 @@ func (q queryUsecase) FindDistricts(origCtx context.Context, payload request.Dis
 		return nil, errors.InternalServerError("cannot parsing data")
 	}
 
-	if district == nil {
-		return nil, errors.NotFound("district not found")
-	}
-
 	var collectionData = make([]response.District, 0)
 	for _, value := range *district {
 		collectionData = append(collectionData, response.District{
@@ -193,10 +179,6 @@ func (q queryUsecase) FindSubDistricts(origCtx context.Context, payload request.
 	subdistrict, ok := resp.Data.(*[]entity.SubDistrict)
 	if !ok {
 		return nil, errors.InternalServerError("cannot parsing data")
-	}
-
-	if subdistrict == nil {
-		return nil, errors.NotFound("subdistrict not found")
 	}
 
 	var collectionData = make([]response.SubDistrict, 0)
@@ -246,12 +228,6 @@ func (q queryUsecase) FindCountries(origCtx context.Context, payload request.Cou
 		return nil, errors.InternalServerError("cannot parsing data")
 	}
 
-	if country == nil {
-		msg := "Country Not Found"
-		q.logger.Error(ctx, msg, fmt.Sprintf("%+v", payload))
-		return nil, errors.NotFound("country not found")
-	}
-
 	var collectionData = make([]response.Country, 0)
 	for _, value := range *country {
 		collectionData = append(collectionData, response.Country{
@@ -295,12 +271,6 @@ func (q queryUsecase) FindContinent(origCtx context.Context) (*response.Continen
 	continent, ok := resp.Data.(*[]entity.Continent)
 	if !ok {
 		return nil, errors.InternalServerError("cannot parsing data")
-	}
-
-	if continent == nil {
-		msg := "Continent Not Found"
-		q.logger.Error(ctx, msg, fmt.Sprintf("%+v", resp))
-		return nil, errors.NotFound("continent not found")
 	}
 
 	var collectionData = make([]response.Continent, 0)

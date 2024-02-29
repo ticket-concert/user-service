@@ -10,12 +10,14 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 
+	addressEntity "user-service/internal/modules/address/models/entity"
 	"user-service/internal/modules/user"
 	userEntity "user-service/internal/modules/user/models/entity"
 	userRequest "user-service/internal/modules/user/models/request"
 	uc "user-service/internal/modules/user/usecases"
 	"user-service/internal/pkg/errors"
 	"user-service/internal/pkg/helpers"
+	mockcertAddress "user-service/mocks/modules/address"
 	mockcert "user-service/mocks/modules/user"
 	mockjwt "user-service/mocks/pkg/helpers"
 	mockkafka "user-service/mocks/pkg/kafka"
@@ -25,24 +27,26 @@ import (
 
 type CommandUsecaseTestSuite struct {
 	suite.Suite
-	mockUserRepositoryQuery   *mockcert.MongodbRepositoryQuery
-	mockUserRepositoryCommand *mockcert.MongodbRepositoryCommand
-	mockLogger                *mocklog.Logger
-	mockRedis                 *mockredis.Collections
-	mockKafkaProducer         *mockkafka.Producer
-	mockJwt                   *mockjwt.TokenGenerator
-	usecase                   user.UsecaseCommand
-	ctx                       context.Context
+	mockUserRepositoryQuery    *mockcert.MongodbRepositoryQuery
+	mockUserRepositoryCommand  *mockcert.MongodbRepositoryCommand
+	mockAddressRepositoryQuery *mockcertAddress.MongodbRepositoryQuery
+	mockLogger                 *mocklog.Logger
+	mockRedis                  *mockredis.Collections
+	mockKafkaProducer          *mockkafka.Producer
+	mockJwt                    *mockjwt.TokenGenerator
+	usecase                    user.UsecaseCommand
+	ctx                        context.Context
 }
 
 func (suite *CommandUsecaseTestSuite) SetupTest() {
 	suite.mockUserRepositoryQuery = &mockcert.MongodbRepositoryQuery{}
 	suite.mockUserRepositoryCommand = &mockcert.MongodbRepositoryCommand{}
+	suite.mockAddressRepositoryQuery = &mockcertAddress.MongodbRepositoryQuery{}
 	suite.mockLogger = &mocklog.Logger{}
 	suite.mockRedis = &mockredis.Collections{}
 	suite.mockKafkaProducer = &mockkafka.Producer{}
 	suite.mockJwt = &mockjwt.TokenGenerator{}
-	suite.ctx = context.WithValue(context.TODO(), "key", "value")
+	suite.ctx = context.Background()
 	suite.usecase = uc.NewCommandUsecase(
 		suite.mockUserRepositoryQuery,
 		suite.mockUserRepositoryCommand,
@@ -50,6 +54,7 @@ func (suite *CommandUsecaseTestSuite) SetupTest() {
 		suite.mockRedis,
 		suite.mockKafkaProducer,
 		suite.mockJwt,
+		suite.mockAddressRepositoryQuery,
 	)
 	array := [][]string{{}, {"yopmail.com"}}
 	helpers.CreateBlackListEmail(array)
@@ -62,8 +67,8 @@ func TestCommandUsecaseTestSuite(t *testing.T) {
 func (suite *CommandUsecaseTestSuite) TestRegisterUserSuccess() {
 	// Arrange user request register
 	payload := userRequest.RegisterUser{
-		FullName:      "Irman Juliansyah",
-		Email:         "irmanjuliansyah@gmail.com",
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
 		Password:      "Password1@",
 		NIK:           "12312131131",
 		MobileNumber:  "081281015121",
@@ -71,6 +76,7 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserSuccess() {
 		CityId:        "123",
 		DistrictId:    "123",
 		SubdictrictId: "123",
+		CountryId:     "1",
 		Address:       "Jalan jalan",
 		RtRw:          "12/12",
 		Role:          "user",
@@ -84,6 +90,56 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserSuccess() {
 		go func() {
 			responseChan <- helpers.Result{
 				Data:  nil,
+				Error: nil,
+			}
+			close(responseChan)
+		}()
+
+		return responseChan
+	}
+
+	addressData := &addressEntity.Country{
+		Id:            1,
+		Code:          "ID",
+		Name:          "Name",
+		Iso3:          "Iso3",
+		Number:        1,
+		ContinentCode: "ContinentCode",
+		ContinentName: "ContinentName",
+		DisplayOrder:  1,
+		FullName:      "FullName",
+	}
+	// Define a mock address repository query function
+	mockFindOneCountry := func(ctx context.Context, id int) <-chan helpers.Result {
+		responseChan := make(chan helpers.Result)
+
+		go func() {
+			responseChan <- helpers.Result{
+				Data:  addressData,
+				Error: nil,
+			}
+			close(responseChan)
+		}()
+
+		return responseChan
+	}
+
+	subdistrictData := &addressEntity.SubDistrict{
+		Id:           "Id",
+		Name:         "Name",
+		DistrictId:   "DistricId",
+		DistrictName: "DistrictName",
+		CityId:       "CityId",
+		CityName:     "CityName",
+		ProvinceId:   "ProvinceId",
+		ProvinceName: "ProvinceName",
+	}
+	mockFindOneSubdistrict := func(ctx context.Context, id string) <-chan helpers.Result {
+		responseChan := make(chan helpers.Result)
+
+		go func() {
+			responseChan <- helpers.Result{
+				Data:  subdistrictData,
 				Error: nil,
 			}
 			close(responseChan)
@@ -107,6 +163,8 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserSuccess() {
 		return responseChan
 	}
 	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockFindOneByEmail)
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockFindOneCountry)
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", suite.ctx, payload.SubdictrictId).Return(mockFindOneSubdistrict)
 	suite.mockUserRepositoryCommand.On("UpsertOneUserTemp", mock.Anything, mock.Anything).Return(mockUpsertOneUserTemp)
 	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
 	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
@@ -116,6 +174,348 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserSuccess() {
 	// Assert
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), payload.Email, payload.Email)
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestRegisterUserErrPayloadCountry() {
+	// Arrange user request register
+	payload := userRequest.RegisterUser{
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
+		Password:      "Password1@",
+		NIK:           "12312131131",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
+		Role:          "user",
+		KKNumber:      "1212121212",
+	}
+	mockFindOneByEmail := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data:  nil,
+		Error: errors.InternalServerError("Error"),
+	}
+
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneByEmail))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// Act
+	_, err := suite.usecase.RegisterUser(suite.ctx, payload)
+	// Assert
+	assert := assert.New(suite.T())
+	assert.NotNil(err)
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestRegisterUserErrFindCountry() {
+	// Arrange user request register
+	payload := userRequest.RegisterUser{
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
+		Password:      "Password1@",
+		NIK:           "12312131131",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		CountryId:     "1",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
+		Role:          "user",
+		KKNumber:      "1212121212",
+	}
+	mockFindOneByEmail := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data:  nil,
+		Error: errors.InternalServerError("Error"),
+	}
+
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneByEmail))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// Act
+	_, err := suite.usecase.RegisterUser(suite.ctx, payload)
+	// Assert
+	assert := assert.New(suite.T())
+	assert.Error(err, "Error")
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestRegisterUserErrFindCountryNil() {
+	// Arrange user request register
+	payload := userRequest.RegisterUser{
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
+		Password:      "Password1@",
+		NIK:           "12312131131",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		CountryId:     "1",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
+		Role:          "user",
+		KKNumber:      "1212121212",
+	}
+	mockFindOneByEmail := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneByEmail))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// Act
+	_, err := suite.usecase.RegisterUser(suite.ctx, payload)
+	// Assert
+	assert := assert.New(suite.T())
+	assert.Error(err, "Error")
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestRegisterUserErrFindCountryParse() {
+	// Arrange user request register
+	payload := userRequest.RegisterUser{
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
+		Password:      "Password1@",
+		NIK:           "12312131131",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		CountryId:     "1",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
+		Role:          "user",
+		KKNumber:      "1212121212",
+	}
+	mockFindOneByEmail := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data:  payload,
+		Error: nil,
+	}
+
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneByEmail))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// Act
+	_, err := suite.usecase.RegisterUser(suite.ctx, payload)
+	// Assert
+	assert := assert.New(suite.T())
+	assert.NotNil(err)
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestRegisterUserErrFindSubdistrict() {
+	// Arrange user request register
+	payload := userRequest.RegisterUser{
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
+		Password:      "Password1@",
+		NIK:           "12312131131",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		CountryId:     "1",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
+		Role:          "user",
+		KKNumber:      "1212121212",
+	}
+	mockFindOneByEmail := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	country := &addressEntity.Country{
+		Id:            1,
+		Code:          "ID",
+		Name:          "Name",
+		Iso3:          "Iso3",
+		Number:        1,
+		ContinentCode: "ContinentCode",
+		ContinentName: "ContinentName",
+		DisplayOrder:  1,
+		FullName:      "FullName",
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data:  country,
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data:  nil,
+		Error: errors.InternalServerError("error"),
+	}
+
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneByEmail))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", suite.ctx, payload.SubdictrictId).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// Act
+	_, err := suite.usecase.RegisterUser(suite.ctx, payload)
+	// Assert
+	assert := assert.New(suite.T())
+	assert.NotNil(err)
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestRegisterUserErrFindSubdistrictNil() {
+	// Arrange user request register
+	payload := userRequest.RegisterUser{
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
+		Password:      "Password1@",
+		NIK:           "12312131131",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		CountryId:     "1",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
+		Role:          "user",
+		KKNumber:      "1212121212",
+	}
+	mockFindOneByEmail := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	country := &addressEntity.Country{
+		Id:            1,
+		Code:          "ID",
+		Name:          "Name",
+		Iso3:          "Iso3",
+		Number:        1,
+		ContinentCode: "ContinentCode",
+		ContinentName: "ContinentName",
+		DisplayOrder:  1,
+		FullName:      "FullName",
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data:  country,
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneByEmail))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", suite.ctx, payload.SubdictrictId).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// Act
+	_, err := suite.usecase.RegisterUser(suite.ctx, payload)
+	// Assert
+	assert := assert.New(suite.T())
+	assert.NotNil(err)
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestRegisterUserErrFindSubdistrictParse() {
+	// Arrange user request register
+	payload := userRequest.RegisterUser{
+		FullName:      "Alif Septian",
+		Email:         "alif@gmail.com",
+		Password:      "Password1@",
+		NIK:           "12312131131",
+		MobileNumber:  "081281015121",
+		ProvinceId:    "123",
+		CityId:        "123",
+		DistrictId:    "123",
+		SubdictrictId: "123",
+		CountryId:     "1",
+		Address:       "Jalan jalan",
+		RtRw:          "12/12",
+		Role:          "user",
+		KKNumber:      "1212121212",
+	}
+	mockFindOneByEmail := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	country := &addressEntity.Country{
+		Id:            1,
+		Code:          "ID",
+		Name:          "Name",
+		Iso3:          "Iso3",
+		Number:        1,
+		ContinentCode: "ContinentCode",
+		ContinentName: "ContinentName",
+		DisplayOrder:  1,
+		FullName:      "FullName",
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data:  country,
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data:  country,
+		Error: nil,
+	}
+
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneByEmail))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", suite.ctx, payload.SubdictrictId).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	// Act
+	_, err := suite.usecase.RegisterUser(suite.ctx, payload)
+	// Assert
+	assert := assert.New(suite.T())
+	assert.NotNil(err)
 
 }
 
@@ -134,6 +534,7 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserValidationFailed() {
 		CityId:        "123",
 		DistrictId:    "123",
 		SubdictrictId: "123",
+		CountryId:     "32",
 		Address:       "Jalan jalan",
 		RtRw:          "12/12",
 		Role:          "user",
@@ -146,27 +547,27 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserValidationFailed() {
 
 	// Test email blacklist
 
-	payload.Email = "irmanjuliansyah@yopmail.com"
+	payload.Email = "alif@yopmail.com"
 	_, err = suite.usecase.RegisterUser(suite.ctx, payload)
 	assert.Error(err, "Email blacklist")
 
 	// Test password not criteria
 
-	payload.Email = "irmanjuliansyah@gmail.com"
+	payload.Email = "alif@gmail.com"
 	payload.Password = "password"
 	_, err = suite.usecase.RegisterUser(suite.ctx, payload)
 	assert.Error(err, "Password not criteria")
 
 	// Test user role not found
 
-	payload.Email = "irmanjuliansyah@gmail.com"
+	payload.Email = "alif@gmail.com"
 	payload.Password = "Password1@"
 	payload.Role = "role bukan didalam list"
 	_, err = suite.usecase.RegisterUser(suite.ctx, payload)
 	assert.Error(err, "User role not found")
 
 	// Validation find email error
-	payload.Email = "irmanjuliansyah@gmail.com"
+	payload.Email = "alif@gmail.com"
 	payload.Password = "Password1@"
 	payload.Role = "user"
 	// Define a mock user repository query function
@@ -192,7 +593,7 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserValidationFailed() {
 func (suite *CommandUsecaseTestSuite) TestRegisterUserEmailRegistered() {
 	// Validation find email already register
 	payload := userRequest.RegisterUser{
-		Email:         "irmanjuliansyah@gmail.com",
+		Email:         "alif@gmail.com",
 		Password:      "Password1@",
 		NIK:           "12312131131",
 		MobileNumber:  "081281015121",
@@ -233,7 +634,7 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserEmailRegistered() {
 func (suite *CommandUsecaseTestSuite) TestRegisterUserUpsertOneError() {
 	// Arrange
 	payload := userRequest.RegisterUser{
-		Email:         "irmanjuliansyah@gmail.com",
+		Email:         "alif@gmail.com",
 		Password:      "Password1@",
 		FullName:      "Full Name",
 		NIK:           "12312131131",
@@ -242,6 +643,7 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserUpsertOneError() {
 		CityId:        "123",
 		DistrictId:    "123",
 		SubdictrictId: "123",
+		CountryId:     "1",
 		Address:       "Jalan jalan",
 		RtRw:          "12/12",
 		Role:          "user",
@@ -252,7 +654,38 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserUpsertOneError() {
 		Data:  nil,
 		Error: nil,
 	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
 	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneByEmail))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", suite.ctx, payload.SubdictrictId).Return(mockChannel(mockFindOneSubdistrict))
 
 	mockUpsertOneUserTemp := helpers.Result{
 		Data:  nil,
@@ -264,13 +697,14 @@ func (suite *CommandUsecaseTestSuite) TestRegisterUserUpsertOneError() {
 	_, err := suite.usecase.RegisterUser(suite.ctx, payload)
 	// Assert
 	assert := assert.New(suite.T())
+	suite.T().Log(err)
 	assert.Error(err, "Error")
 }
 
 func (suite *CommandUsecaseTestSuite) TestVerifyRegisterUserSuccess() {
 	// Arrange user request verify
 	payload := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 		Otp:   "123456",
 	}
 
@@ -278,12 +712,12 @@ func (suite *CommandUsecaseTestSuite) TestVerifyRegisterUserSuccess() {
 
 	mockUserQueryResponse := helpers.Result{
 		Data: &userEntity.User{
-			Email:        "irmanjuliansyah@gmail.com",
+			Email:        "alif@gmail.com",
 			Address:      "<string>",
 			NIK:          "12312131131",
 			MobileNumber: "+6281281015121",
 			CreatedAt:    time.Now(),
-			FullName:     "irmanjuliansyah",
+			FullName:     "alif",
 			KKNumber:     "<string>",
 			LoginAt:      time.Now(),
 			Password:     "/P8zIA/HX7pQew0m4SLWcBl/ivugz8wTFyKmFPQiAaA=",
@@ -330,7 +764,7 @@ func (suite *CommandUsecaseTestSuite) TestVerifyRegisterUserValidationFailed() {
 
 	// Arrange user request verify
 	payload := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyahgmail.com",
+		Email: "alifgmail.com",
 		Otp:   "123456",
 	}
 	_, err := suite.usecase.VerifyRegisterUser(suite.ctx, payload)
@@ -340,12 +774,12 @@ func (suite *CommandUsecaseTestSuite) TestVerifyRegisterUserValidationFailed() {
 
 	// Test email blacklist
 
-	payload.Email = "irmanjuliansyah@yopmail.com"
+	payload.Email = "alif@yopmail.com"
 	_, err = suite.usecase.VerifyRegisterUser(suite.ctx, payload)
 	assert.Error(err, "Email blacklist")
 
 	// Test redis empty
-	payload.Email = "irmanjuliansyah@gmail.com"
+	payload.Email = "alif@gmail.com"
 	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("", nil))
 	_, err = suite.usecase.VerifyRegisterUser(suite.ctx, payload)
 	assert.Error(err, "Otp expired")
@@ -361,7 +795,7 @@ func (suite *CommandUsecaseTestSuite) TestVerifyRegisterUserErrorFindEmailUserTe
 	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
 	// Arrange user request verify
 	payload := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 		Otp:   "123456",
 	}
 	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("123456", nil))
@@ -379,7 +813,7 @@ func (suite *CommandUsecaseTestSuite) TestVerifyRegisterUserNotFoundFindEmailUse
 	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
 	// Arrange user request verify
 	payload := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 		Otp:   "123456",
 	}
 	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("123456", nil))
@@ -398,7 +832,7 @@ func (suite *CommandUsecaseTestSuite) TestVerifyRegisterUserCantParsingData() {
 	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
 	// Arrange user request verify
 	payload := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 		Otp:   "123456",
 	}
 	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("123456", nil))
@@ -417,16 +851,16 @@ func (suite *CommandUsecaseTestSuite) TestVerifyRegisterUserErrUpsertOne() {
 	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
 	// Arrange user request verify
 	payload := userRequest.VerifyRegisterUser{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 		Otp:   "123456",
 	}
 	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("123456", nil))
 	mockUserQueryResponse := helpers.Result{
 		Data: &userEntity.User{
-			Email:        "irmanjuliansyah@gmail.com",
+			Email:        "alif@gmail.com",
 			Address:      "<string>",
 			CreatedAt:    time.Now(),
-			FullName:     "irmanjuliansyah",
+			FullName:     "alif",
 			NIK:          "12312131131",
 			MobileNumber: "+6281281015121",
 			KKNumber:     "<string>",
@@ -472,4 +906,1356 @@ func mockChannel(result helpers.Result) <-chan helpers.Result {
 	}()
 
 	return responseChan
+}
+
+func (suite *CommandUsecaseTestSuite) TestLoginUserSuccess() {
+	// Arrange user request register
+	payload := userRequest.LoginUser{
+		Email:    "alif@gmail.com",
+		Password: "Password1@",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("3", nil))
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneUser))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockRedis.On("Del", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockJwt.On("GenerateToken", mock.Anything, mock.Anything).Return("mockedToken", "mockedExpiredAt", nil)
+	suite.mockJwt.On("GenerateTokenRefresh", mock.Anything, mock.Anything).Return("mockedToken", nil)
+	// Act
+	_, err := suite.usecase.LoginUser(suite.ctx, payload)
+	// Assert
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), payload.Email, payload.Email)
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestLoginUserValidationFailed() {
+	// Test incorrect email format
+
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+
+	// Arrange user request verify
+	payload := userRequest.LoginUser{
+		Email:    "alifgmail.com",
+		Password: "123456",
+	}
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	_, err := suite.usecase.LoginUser(suite.ctx, payload)
+
+	assert := assert.New(suite.T())
+	assert.Error(err, "Incorrect email format")
+
+	// Test email blacklist
+
+	payload.Email = "alif@yopmail.com"
+	_, err = suite.usecase.LoginUser(suite.ctx, payload)
+	assert.Error(err, "Email blacklist")
+
+	// Test redis over attempt
+	payload.Email = "alif@gmail.com"
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("7", nil))
+	_, err = suite.usecase.LoginUser(suite.ctx, payload)
+	assert.Error(err, "You have too many attempts, please wait 10 minutes")
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestLoginUserErrFindEmail() {
+	// Arrange user request register
+	payload := userRequest.LoginUser{
+		Email:    "alif@gmail.com",
+		Password: "Password1@",
+	}
+
+	// Test Error resp.Error == nil
+	mockFindOneUser := helpers.Result{
+		Data:  nil,
+		Error: errors.InternalServerError("error"),
+	}
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("3", nil))
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneUser))
+	// Act
+	_, err := suite.usecase.LoginUser(suite.ctx, payload)
+	// Assert
+	assert.Error(suite.T(), err)
+
+	// Test Error resp.Data == nil
+	mockFindOneUser = helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("3", nil))
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneUser))
+	// Act
+	_, err = suite.usecase.LoginUser(suite.ctx, payload)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestLoginUserErrFindEmailParse() {
+	// Arrange user request register
+	payload := userRequest.LoginUser{
+		Email:    "alif@gmail.com",
+		Password: "Password1@",
+	}
+
+	// Test Error unmarshal data user
+	mockFindOneUser := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("3", nil))
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneUser))
+	// Act
+	_, err := suite.usecase.LoginUser(suite.ctx, payload)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestLoginUserErrPassword() {
+	// Arrange user request register
+	payload := userRequest.LoginUser{
+		Email:    "alif@gmail.com",
+		Password: "Password1@",
+	}
+
+	// Test Error password data user
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("3", nil))
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneUser))
+	// Act
+	_, err := suite.usecase.LoginUser(suite.ctx, payload)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestLoginUserErrUpsert() {
+	// Arrange user request register
+	payload := userRequest.LoginUser{
+		Email:    "alif@gmail.com",
+		Password: "Password1@",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: errors.InternalServerError("error"),
+	}
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("3", nil))
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneUser))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockRedis.On("Del", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockJwt.On("GenerateToken", mock.Anything, mock.Anything).Return("mockedToken", "mockedExpiredAt", nil)
+	suite.mockJwt.On("GenerateTokenRefresh", mock.Anything, mock.Anything).Return("mockedToken", nil)
+	// Act
+	_, err := suite.usecase.LoginUser(suite.ctx, payload)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestLoginUserErrGenToken() {
+	// Arrange user request register
+	payload := userRequest.LoginUser{
+		Email:    "alif@gmail.com",
+		Password: "Password1@",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("3", nil))
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneUser))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockRedis.On("Del", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockJwt.On("GenerateToken", mock.Anything, mock.Anything).Return("mockedToken", "mockedExpiredAt", errors.BadRequest("error"))
+	// suite.mockJwt.On("GenerateTokenRefresh", mock.Anything, mock.Anything).Return("mockedToken", nil)
+	// Act
+	_, err := suite.usecase.LoginUser(suite.ctx, payload)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestLoginUserErrGenTokenRefresh() {
+	// Arrange user request register
+	payload := userRequest.LoginUser{
+		Email:    "alif@gmail.com",
+		Password: "Password1@",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockRedis.On("Get", suite.ctx, mock.AnythingOfType("string")).Return(redis.NewStringResult("3", nil))
+	suite.mockUserRepositoryQuery.On("FindOneByEmail", mock.Anything, payload.Email).Return(mockChannel(mockFindOneUser))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockKafkaProducer.On("Publish", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockLogger.On("Info", mock.Anything, mock.Anything, mock.Anything)
+	suite.mockRedis.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockRedis.On("Del", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	suite.mockJwt.On("GenerateToken", mock.Anything, mock.Anything).Return("mockedToken", "mockedExpiredAt", nil)
+	suite.mockJwt.On("GenerateTokenRefresh", mock.Anything, mock.Anything).Return("mockedToken", errors.BadRequest("error"))
+	// Act
+	_, err := suite.usecase.LoginUser(suite.ctx, payload)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUser() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.NoError(suite.T(), err)
+
+	// Test error Role
+	payload.Role = "role"
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	// Act
+	_, err = suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+
+	// Test error email not found
+	payload.Role = "user"
+	mockFindOneUser.Error = errors.BadRequest("error")
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	// Act
+	_, err = suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErr() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: errors.InternalServerError("error"),
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrParse() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrCountry() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "country",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrCountryDb() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: errors.BadRequest("error"),
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrCountryNil() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrCountryParse() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrSubdistrict() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: errors.BadRequest("error"),
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrSubdistrictNil() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrSubdistrictParse() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: nil,
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
+}
+
+func (suite *CommandUsecaseTestSuite) TestUpdateUserErrUpsert() {
+	// Arrange user request register
+	payload := userRequest.UpdateUser{
+		FullName:      "FullName",
+		MobileNumber:  "+6281281015121",
+		Address:       "Address",
+		ProvinceId:    "ProvinceId",
+		CityId:        "CityId",
+		DistrictId:    "DistrictId",
+		SubdictrictId: "SubdictrictId",
+		CountryId:     "1",
+		RtRw:          "RtRw",
+		Role:          "user",
+		Latitude:      "Latitude",
+		Longitude:     "Longitude",
+	}
+
+	mockFindOneUser := helpers.Result{
+		Data: &userEntity.User{
+			Email:        "alif@gmail.com",
+			Address:      "<string>",
+			CreatedAt:    time.Now(),
+			FullName:     "alif",
+			NIK:          "12312131131",
+			MobileNumber: "+6281281015121",
+			KKNumber:     "<string>",
+			LoginAt:      time.Now(),
+			Password:     "PzWCUGI/iepF6Xyz1dKIgfQYRwkVTN5AdXTTl9Yz+W8=",
+			Role:         "user",
+			RtRw:         "<string>",
+			Subdistrict: userEntity.Subdistrict{
+				Name:         "Desa kkn",
+				DistrictId:   "1",
+				DistrictName: "Kelurahan kkn",
+				CityId:       "1",
+				CityName:     "Kota kkn",
+				ProvinceId:   "1",
+				ProvinceName: "Provinsi kkn",
+				Id:           "1",
+			},
+			UpdatedAt: time.Now(),
+			UserId:    "a1d7e6c6-a4b4-48b0-b436-c882a9cb7980",
+		},
+		Error: nil,
+	}
+
+	mockFindOneCountry := helpers.Result{
+		Data: &addressEntity.Country{
+			Id:            1,
+			Code:          "ID",
+			Name:          "Name",
+			Iso3:          "Iso3",
+			Number:        1,
+			ContinentCode: "ContinentCode",
+			ContinentName: "ContinentName",
+			DisplayOrder:  1,
+			FullName:      "FullName",
+		},
+		Error: nil,
+	}
+
+	mockFindOneSubdistrict := helpers.Result{
+		Data: &addressEntity.SubDistrict{
+			Id:           "Id",
+			Name:         "Name",
+			DistrictId:   "DistricId",
+			DistrictName: "DistrictName",
+			CityId:       "CityId",
+			CityName:     "CityName",
+			ProvinceId:   "ProvinceId",
+			ProvinceName: "ProvinceName",
+		},
+		Error: nil,
+	}
+
+	// Define a mock user repository command function
+	mockUpsertOneUser := helpers.Result{
+		Data:  nil,
+		Error: errors.BadRequest("error"),
+	}
+	suite.mockUserRepositoryQuery.On("FindOneUserId", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneUser))
+	suite.mockAddressRepositoryQuery.On("FindOneCountry", mock.Anything, 1).Return(mockChannel(mockFindOneCountry))
+	suite.mockAddressRepositoryQuery.On("FindOneSubdistrict", mock.Anything, mock.Anything).Return(mockChannel(mockFindOneSubdistrict))
+	suite.mockUserRepositoryCommand.On("UpsertOneUser", mock.Anything, mock.Anything).Return(mockChannel(mockUpsertOneUser))
+	suite.mockLogger.On("Error", mock.Anything, mock.Anything, mock.Anything)
+	// Act
+	_, err := suite.usecase.UpdateUser(suite.ctx, payload, mock.Anything)
+	// Assert
+	assert.Error(suite.T(), err)
 }

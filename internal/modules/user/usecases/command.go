@@ -226,7 +226,7 @@ func (c commandUsecase) RegisterUser(origCtx context.Context, payload userReques
 	}
 	countryData, ok := country.Data.(*addressEntity.Country)
 	if !ok {
-		return nil, errors.InternalServerError("cannot parsing data")
+		return nil, errors.InternalServerError("cannot parsing data country")
 	}
 
 	var subDistrictUser userEntity.Subdistrict
@@ -242,7 +242,7 @@ func (c commandUsecase) RegisterUser(origCtx context.Context, payload userReques
 		}
 		subdistrictData, ok := subdistrict.Data.(*addressEntity.SubDistrict)
 		if !ok {
-			return nil, errors.InternalServerError("cannot parsing data")
+			return nil, errors.InternalServerError("cannot parsing data subdistrict")
 		}
 		if subdistrictData != nil {
 			subDistrictUser = userEntity.Subdistrict{
@@ -403,6 +403,7 @@ func (c commandUsecase) LoginUser(origCtx context.Context, payload userRequest.L
 	}
 
 	resp := <-c.userRepositoryQuery.FindOneByEmail(ctx, payload.Email)
+	fmt.Println("resp: ", resp)
 	if resp.Error != nil {
 		return nil, resp.Error
 	}

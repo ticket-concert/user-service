@@ -39,7 +39,7 @@ func TestCommandTestSuite(t *testing.T) {
 
 func (suite *CommandTestSuite) TestUpsertOneUserTemp() {
 	testUser := userEntity.User{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 	}
 
 	// Mock UpsertOne
@@ -66,7 +66,7 @@ func (suite *CommandTestSuite) TestUpsertOneUserTemp() {
 
 func (suite *CommandTestSuite) TestUpsertOneUser() {
 	testUser := userEntity.User{
-		Email: "irmanjuliansyah@gmail.com",
+		Email: "alif@gmail.com",
 	}
 
 	// Mock UpsertOne

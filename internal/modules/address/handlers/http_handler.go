@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"user-service/internal/modules/address"
 	"user-service/internal/modules/address/models/request"
 	"user-service/internal/pkg/errors"
@@ -57,7 +56,6 @@ func (a AddressHttpHandler) GetCities(c *fiber.Ctx) error {
 	if err := c.QueryParser(req); err != nil {
 		return helpers.RespError(c, a.Logger, errors.BadRequest("bad request"))
 	}
-	fmt.Println(req.ProvinceId)
 
 	if err := a.Validator.Struct(req); err != nil {
 		return helpers.RespError(c, a.Logger, errors.BadRequest(err.Error()))
