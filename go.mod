@@ -16,6 +16,7 @@ require (
 	go.uber.org/zap v1.24.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.58.0
 	gopkg.in/confluentinc/confluent-kafka-go.v1 v1.8.2
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (
