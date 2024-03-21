@@ -306,7 +306,7 @@ func (c commandUsecase) RegisterUser(origCtx context.Context, payload userReques
 		Otp:      string(otp),
 	}
 	marshaledKafkaData, _ := json.Marshal(kafkaData)
-	otpTopic := "asm-concert-send-otp-user-registration"
+	otpTopic := "concert-send-otp-user-registration"
 	c.kafkaProducer.Publish(otpTopic, marshaledKafkaData, nil)
 	c.logger.Info(ctx, fmt.Sprintf("Send kafka email otp : %s, topic: %s", payload.Email, otpTopic), fmt.Sprintf("%+v", payload.Email))
 
