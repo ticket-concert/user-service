@@ -34,5 +34,6 @@ jobs:
         id: docker_build
         uses: docker/build-push-action@v3
         with:
+          file: ./build/image/Dockerfile
           push: true
           tags: ticket-concert/user-service:latest
