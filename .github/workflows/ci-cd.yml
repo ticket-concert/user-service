@@ -16,10 +16,10 @@ jobs:
           go-version: 1.20
 
       - name: Build
-        run: go build -v ./...
+        run: make build
 
       - name: Test
-        run: go test -v ./...
+        run: make unit-test
 
       - name: Login to DockerHub
         uses: docker/login-action@v2
