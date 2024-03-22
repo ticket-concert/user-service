@@ -7,7 +7,7 @@ on:
     types: [opened, synchronize, reopened]
 jobs:
   build:
-    name: Build, Test, Analyze and deploy
+    name: Build, Test, Analyze and Deploy
     runs-on: ubuntu-latest
     steps:
       - name: Setup Go
