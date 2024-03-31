@@ -79,9 +79,9 @@ make coverage
 * **Alif Septian Nurdianto** - [Github](https://github.com/alifsn)
 
 ## Development Tools
-[Fiber](https://gofiber.io/) Rest Framework
-[Zap](https://github.com/uber-go/zap) Log Management
-[Kafka](https://pkg.go.dev/gopkg.in/confluentinc/confluent-kafka-go.v1@v1.8.2) Event Management
-[Mockery](https://github.com/vektra/mockery) Mock Generator
-[Go mod](https://go.dev/ref/mod) Depedency Management
-[Docker] Container Management
+* [Fiber](https://gofiber.io/) Rest Framework
+* [Zap](https://github.com/uber-go/zap) Log Management
+* [Kafka](https://pkg.go.dev/gopkg.in/confluentinc/confluent-kafka-go.v1@v1.8.2) Event Management
+* [Mockery](https://github.com/vektra/mockery) Mock Generator
+* [Go mod](https://go.dev/ref/mod) Depedency Management
+* [Docker](https://www.docker.com/) Container Management
