@@ -59,7 +59,6 @@ func (q queryUsecase) GetProfile(origCtx context.Context, payload userRequest.Ge
 		Address:       userData.Address,
 		RtRw:          userData.RtRw,
 		Role:          userData.Role,
-		KKNumber:      userData.KKNumber,
 		CountryCode:   userData.Country.Code,
 		CountryName:   userData.Country.Name,
 		ContinentName: userData.Country.ContinentName,
