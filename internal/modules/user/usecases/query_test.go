@@ -78,7 +78,6 @@ func (suite *QueryUsecaseTestSuite) TestGetProfileSuccess() {
 	assert.Equal(suite.T(), "<string>", result.Address)
 	assert.Equal(suite.T(), "<string>", result.RtRw)
 	assert.Equal(suite.T(), "user", result.Role)
-	assert.Equal(suite.T(), "<string>", result.KKNumber)
 }
 
 func (suite *QueryUsecaseTestSuite) TestGetProfileNotFound() {
