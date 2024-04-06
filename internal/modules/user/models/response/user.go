@@ -30,5 +30,4 @@ type GetProfile struct {
 	Longitude     string `json:"longitude" bson:"longitude"`
 	RtRw          string `json:"rtRw"`
 	Role          string `json:"role"`
-	KKNumber      string `json:"kkNumber"`
 }
