@@ -16,7 +16,6 @@ type User struct {
 	Country      Country     `json:"country" bson:"country"`
 	RtRw         string      `json:"rtrw" bson:"rtrw"`
 	Role         string      `json:"role" bson:"role"`
-	KKNumber     string      `json:"kkNumber" bson:"kkNumber"`
 	Status       string      `json:"status" bson:"status"`
 	LoginAt      time.Time   `json:"loginAt" bson:"loginAt"`
 	CreatedAt    time.Time   `json:"createdAt" bson:"createdAt"`

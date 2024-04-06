@@ -59,7 +59,6 @@ func (suite *QueryUsecaseTestSuite) TestGetProfileSuccess() {
 			Address:      "<string>",
 			RtRw:         "<string>",
 			Role:         "user",
-			KKNumber:     "<string>",
 		},
 		Error: nil,
 	}
